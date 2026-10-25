@@ -1,0 +1,10 @@
+{% extends 'library/index.html' %}
+{% block body %}
+<form>
+    <h1>{{the_book.title}}</h1>
+    <p>{{the_book.description}}</p>
+    <p>It published on {{the_book.published_year}}</p>
+    <p>Wroted by {{the_book.author}}</p>
+    <p>the genre : {{the_book.category}}</p>
+</form>
+{% endblock body %}
