@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 
 class Author(models.Model) :
     name = models.CharField(max_length=100)
-    bio = models.TextField(null=True)
+    bio = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -21,8 +21,8 @@ class Category(models.Model) :
 
 class Book(models.Model) :
     title = models.CharField(max_length=100)
-    description = models.TextField(null=True)
-    published_year = models.IntegerField(null=True)
+    description = models.TextField(null=True, blank=True)
+    published_year = models.IntegerField(null=True, blank=True)
     author = models.ManyToManyField(Author)
     category = models.ForeignKey(Category , on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -36,7 +36,7 @@ class Review(models.Model):
     book = models.ForeignKey(Book , on_delete=models.CASCADE)
     user = models.ForeignKey(User , on_delete=models.CASCADE)
     rating = models.IntegerField()
-    comment = models.TextField(null=True)
+    comment = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

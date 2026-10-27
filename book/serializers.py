@@ -21,6 +21,17 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class BookSerializer(serializers.ModelSerializer):
+    author = serializers.SlugRelatedField(
+        many=True,
+        slug_field='name',
+        queryset=Author.objects.all()
+        )
+
+    category = serializers.SlugRelatedField(
+        slug_field='name',
+        queryset=Category.objects.all()
+    )
+
     class Meta:
         model = Book
         fields = '__all__'
