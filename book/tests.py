@@ -67,6 +67,15 @@ class BookAuthorFilterTest(APITestCase):
         self.assertEqual(response.data["results"], [])
 
 
+    def test_filter_books_by_author_name_is_rejected(self):
+        response = self.client.get(
+            reverse("book_filter"),
+            {"author": "Author One"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
 class ImportantAPITests(APITestCase):
 
     def setUp(self):
@@ -168,7 +177,6 @@ class ImportantAPITests(APITestCase):
             format="json",
         )
 
-        print(first_response.data)
 
         self.assertEqual(
             first_response.status_code,
@@ -215,3 +223,35 @@ class ImportantAPITests(APITestCase):
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+    def test_owner_can_delete_own_review(self):
+        review = Review.objects.create(book=self.book, user=self.user1, rating=4)
+        self.client.force_authenticate(user=self.user1)
+
+        response = self.client.delete(reverse("review_delete", args=[review.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Review.objects.filter(id=review.id).exists())
+
+
+    def test_admin_can_delete_any_review(self):
+        admin = User.objects.create_superuser(username="admin", password="TestPassword123!")
+        review = Review.objects.create(book=self.book, user=self.user1, rating=4)
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.delete(reverse("review_delete", args=[review.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+
+    def test_deleting_category_keeps_books_and_reviews(self):
+        admin = User.objects.create_superuser(username="admin2", password="TestPassword123!")
+        review = Review.objects.create(book=self.book, user=self.user1, rating=4)
+        self.client.force_authenticate(user=admin)
+
+        response = self.client.delete(reverse("category_delete", args=[self.category.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.book.refresh_from_db()
+        self.assertIsNone(self.book.category)
+        self.assertTrue(Review.objects.filter(id=review.id).exists())

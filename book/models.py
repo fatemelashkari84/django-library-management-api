@@ -24,7 +24,7 @@ class Book(models.Model) :
     description = models.TextField(null=True, blank=True)
     published_year = models.IntegerField(null=True, blank=True)
     author = models.ManyToManyField(Author)
-    category = models.ForeignKey(Category , on_delete=models.CASCADE)
+    category = models.ForeignKey(Category , on_delete=models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

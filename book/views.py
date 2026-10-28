@@ -16,21 +16,45 @@ from drf_spectacular.types import OpenApiTypes
 
 # Create your views here.
 
+from rest_framework import serializers
+from drf_spectacular.utils import inline_serializer
+
+
+def paginated(serializer_class):
+    return inline_serializer(
+        name=f'Paginated{serializer_class.__name__}',
+        fields={
+            'count': serializers.IntegerField(),
+            'next': serializers.URLField(allow_null=True),
+            'previous': serializers.URLField(allow_null=True),
+            'results': serializer_class(many=True),
+        },
+    )
+
+
+PAGE_PARAMS = [
+    OpenApiParameter('page', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+    OpenApiParameter('page_size', OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+]
+
 class book_paginator(PageNumberPagination) :
     page_size = 10
     page_size_query_param = 'page_size'
     max_page_size = 100
 
 
+@extend_schema(parameters=PAGE_PARAMS, responses=paginated(BookSerializer))
 @api_view(['GET'])
 def book_list(request) :
-    books = Book.objects.all()
+    books = Book.objects.all().order_by('id')
     paginator = book_paginator()
     page = paginator.paginate_queryset(books, request)
     serilizer = BookSerializer(page, many=True)
     return paginator.get_paginated_response(serilizer.data)
 
 
+
+@extend_schema(responses=BookSerializer) 
 @api_view(['GET'])
 def books_info(request, id) :
     the_book = get_object_or_404(Book , id=id)
@@ -82,7 +106,7 @@ def update_book(request, id) :
         return JsonResponse(serialiser.errors , status=400)
     
 
-
+@extend_schema(responses={204: None}) 
 @api_view(["DELETE"])
 @permission_classes([IsAdminUser])
 def delete_book(request , id) :
@@ -95,33 +119,20 @@ def delete_book(request , id) :
 
 @extend_schema(
     parameters=[
-        OpenApiParameter(
-            name='title',
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description='Filter by book title',
-        ),
-        OpenApiParameter(
-            name='author',
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description='Filter by author name',
-        ),
-        OpenApiParameter(
-            name='category',
-            type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
-            required=False,
-            description='Filter by category name',
-        ),
-    ]
+        OpenApiParameter(name='title', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                         required=False, description='Filter by book title'),
+        OpenApiParameter(name='author', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                         required=False, description='Filter by author name or ID'),
+        OpenApiParameter(name='category', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                         required=False, description='Filter by category name'),
+        *PAGE_PARAMS,
+    ],
+    responses=paginated(BookSerializer),
 )
 @api_view(['GET'])
 def filter_book(request) :
 
-    result = Book.objects.all()
+    result = Book.objects.all().order_by('id')
 
     title = request.query_params.get('title')
     author = request.query_params.get('author')
@@ -132,12 +143,12 @@ def filter_book(request) :
         result = result.filter(title__icontains = title)
 
     if author:
-        if author.isdigit():
-            result = result.filter(author__id=int(author))
-        else:
-            result = result.filter(author__name__icontains=author)
-
-        result = result.distinct()
+        if not author.isdigit():
+            return Response(
+                {'author': 'author must be a numeric ID.'},
+                status=400,
+            )
+        result = result.filter(author__id=int(author))
 
     if category :
         result = result.filter(category__name__icontains=category)
@@ -149,6 +160,7 @@ def filter_book(request) :
 
     return paginator.get_paginated_response(serializer.data)
 
+@extend_schema(responses=AuthorSerializer(many=True))
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def author_list(request):
@@ -156,6 +168,7 @@ def author_list(request):
     serializer = AuthorSerializer(authors, many=True)
     return Response(serializer.data)
 
+@extend_schema(responses=AuthorSerializer)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def author_info(request, id) :
@@ -208,7 +221,7 @@ def update_author(request, id) :
         return JsonResponse(serialiser.errors , status=400)
     
 
-
+@extend_schema(responses={204: None}) 
 @api_view(["DELETE"])
 @permission_classes([IsAdminUser])
 def delete_author(request , id) :
@@ -218,6 +231,7 @@ def delete_author(request , id) :
 
 
 
+@extend_schema(responses=CategorySerializer(many=True)) 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def category_list(request):
@@ -225,6 +239,7 @@ def category_list(request):
     serializer = CategorySerializer(categories, many=True)
     return Response(serializer.data)
 
+@extend_schema(responses=CategorySerializer)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def category_info(request, id) :
@@ -277,6 +292,7 @@ def update_category(request, id) :
     
 
 
+@extend_schema(responses={204: None}) 
 @api_view(["DELETE"])
 @permission_classes([IsAdminUser])
 def delete_category(request , id) :
@@ -358,22 +374,22 @@ def update_review(request, id):
     return Response(serializer.errors, status=400)   
 
 
+@extend_schema(responses={204: None}) 
 @api_view(['DELETE'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def delete_review(request, id):
     review = get_object_or_404(Review, id=id)
-
-    if review.user != request.user:
-        return Response(
-            {'detail': 'You cannot delete another user\'s review.'},
-            status=403
-        )
-
+    if review.user != request.user and not request.user.is_staff: # to allow admin and the owner of the review to delete it
+        return Response({'detail': "You cannot delete another user's review."}, status=403)
     review.delete()
     return Response(status=204)
 
 
-
+@extend_schema(responses=inline_serializer('CurrentUser', {
+    'id': serializers.IntegerField(),
+    'username': serializers.CharField(),
+    'email': serializers.EmailField(),
+}))
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
